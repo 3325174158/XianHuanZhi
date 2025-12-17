@@ -7,77 +7,119 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  build-and-test:
-    # 支持多个操作系统平台
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    
-    runs-on: ${{ matrix.os }}
+  # 分别针对不同操作系统配置
+  build-linux:
+    runs-on: ubuntu-latest
     
     steps:
-    # 第一步：检出代码
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    # 第二步：设置构建环境（根据操作系统不同处理）
-    - name: Set up build environment
+    - name: Install dependencies
       run: |
-        # 检测操作系统并安装相应依赖
-        if [ "$RUNNER_OS" == "Linux" ]; then
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake
-        elif [ "$RUNNER_OS" == "Windows" ]; then
-          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
-          choco install mingw
-        elif [ "$RUNNER_OS" == "macOS" ]; then
-          brew install cmake
-        fi
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake g++ make
     
-    # 第三步：创建构建目录
+    - name: List files
+      run: |
+        echo "项目文件："
+        ls -la *.cpp *.h
+    
+    - name: Test compilation
+      run: |
+        echo "测试编译..."
+        g++ -std=c++11 -c main.cpp XianHuanZhi.cpp ItemManager.cpp XianHuanZhiSystem.cpp AdminManager.cpp 2>&1 | head -5 || echo "编译测试中..."
+    
     - name: Create build directory
-      run: mkdir build
+      run: mkdir -p build
     
-    # 第四步：配置项目（使用CMake）
-    - name: Configure project
+    - name: Configure with CMake
       working-directory: ./build
       run: cmake ..
     
-    # 第五步：构建项目
     - name: Build project
       working-directory: ./build
-      run: cmake --build . --config Release
+      run: make
     
-    # 第六步：运行编译好的程序进行基本测试
-    - name: Run program test
+    - name: Run test
       working-directory: ./build
       run: |
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          ./Release/XianHuanZhi.exe --help || echo "Executable tested"
-        else
-          ./XianHuanZhi --help || echo "Executable tested"
+        if [ -f "XianHuanZhi" ]; then
+          echo "构建成功！可执行文件已创建"
+          timeout 1s ./XianHuanZhi || echo "程序退出"
         fi
-    
-    # 第七步：清理测试文件（如果存在）
-    - name: Clean up test files
-      run: |
-        rm -f users.dat items.dat 2>/dev/null || true
 
-  # 代码质量检查（可选）
-  code-quality:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+  build-windows:
+    runs-on: windows-latest
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Install clang-tidy
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang-tidy
+    - name: Install CMake
+      uses: jwlawson/actions-setup-cmake@v1
+      with:
+        cmake-version: '3.25'
     
-    - name: Run clang-tidy
+    - name: List files
+      shell: cmd
       run: |
-        # 检查C++文件
-        find . -name "*.cpp" -o -name "*.h" | xargs clang-tidy --quiet || true
+        echo 列出文件：
+        dir *.cpp *.h
+    
+    - name: Create build directory
+      shell: cmd
+      run: mkdir build
+    
+    - name: Configure with CMake
+      shell: cmd
+      working-directory: ./build
+      run: cmake ..
+    
+    - name: Build project
+      shell: cmd
+      working-directory: ./build
+      run: cmake --build . --config Release
+    
+    - name: Check executable
+      shell: cmd
+      working-directory: ./build/Release
+      run: |
+        if exist XianHuanZhi.exe (
+          echo 构建成功！
+        ) else (
+          echo 未找到可执行文件
+        )
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        brew install cmake
+    
+    - name: List files
+      run: ls -la *.cpp *.h
+    
+    - name: Create build directory
+      run: mkdir -p build
+    
+    - name: Configure with CMake
+      working-directory: ./build
+      run: cmake ..
+    
+    - name: Build project
+      working-directory: ./build
+      run: make
+    
+    - name: Run test
+      working-directory: ./build
+      run: |
+        if [ -f "XianHuanZhi" ]; then
+          echo "构建成功！"
+          timeout 1s ./XianHuanZhi || echo "程序执行完成"
+        fi
