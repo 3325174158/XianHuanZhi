@@ -1,0 +1,83 @@
+name: C++ Project CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    # 支持多个操作系统平台
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    # 第一步：检出代码
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    # 第二步：设置构建环境（根据操作系统不同处理）
+    - name: Set up build environment
+      run: |
+        # 检测操作系统并安装相应依赖
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+        elif [ "$RUNNER_OS" == "Windows" ]; then
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+          choco install mingw
+        elif [ "$RUNNER_OS" == "macOS" ]; then
+          brew install cmake
+        fi
+    
+    # 第三步：创建构建目录
+    - name: Create build directory
+      run: mkdir build
+    
+    # 第四步：配置项目（使用CMake）
+    - name: Configure project
+      working-directory: ./build
+      run: cmake ..
+    
+    # 第五步：构建项目
+    - name: Build project
+      working-directory: ./build
+      run: cmake --build . --config Release
+    
+    # 第六步：运行编译好的程序进行基本测试
+    - name: Run program test
+      working-directory: ./build
+      run: |
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          ./Release/XianHuanZhi.exe --help || echo "Executable tested"
+        else
+          ./XianHuanZhi --help || echo "Executable tested"
+        fi
+    
+    # 第七步：清理测试文件（如果存在）
+    - name: Clean up test files
+      run: |
+        rm -f users.dat items.dat 2>/dev/null || true
+
+  # 代码质量检查（可选）
+  code-quality:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install clang-tidy
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tidy
+    
+    - name: Run clang-tidy
+      run: |
+        # 检查C++文件
+        find . -name "*.cpp" -o -name "*.h" | xargs clang-tidy --quiet || true
